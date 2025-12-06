@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Room from "@/models/Room";
-import User from "@/models/User";
 import jwt from "jsonwebtoken";
 
-export async function POST(req) {
+export async function DELETE(req, { params }) {
   try {
     await dbConnect();
+
+    const { roomId } = params;
 
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
     if (!token) {
@@ -26,34 +27,33 @@ export async function POST(req) {
       );
     }
 
-    const { name, maxParticipants } = await req.json();
+    // Find the room
+    const room = await Room.findById(roomId);
 
-    if (!name) {
+    if (!room) {
       return NextResponse.json(
-        { error: "Room name is required" },
-        { status: 400 }
+        { error: "Room not found" },
+        { status: 404 }
       );
     }
 
-    // Delete any previous active room created by this user (one room per user at a time)
-    await Room.deleteMany({
-      createdBy: decoded.id,
-      isActive: true,
-    });
+    // Check if the user is the room creator (host)
+    if (room.createdBy.toString() !== decoded.id) {
+      return NextResponse.json(
+        { error: "Only the room host can end the room" },
+        { status: 403 }
+      );
+    }
 
-    const room = await Room.create({
-      name,
-      createdBy: decoded.id,
-      participants: [decoded.id],
-      maxParticipants: maxParticipants || 10,
-    });
+    // Delete the room
+    await Room.findByIdAndDelete(roomId);
 
     return NextResponse.json(
-      { message: "Room created successfully", room },
-      { status: 201 }
+      { message: "Room ended successfully" },
+      { status: 200 }
     );
   } catch (err) {
-    console.error("Room creation error:", err);
+    console.error("Room deletion error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
