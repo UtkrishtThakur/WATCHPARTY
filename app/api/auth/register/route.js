@@ -1,3 +1,7 @@
+/**
+ * File: app/api/auth/register/route.js
+ * Purpose: User registration endpoint - generates OTP, sends email, stores OTP record
+ */
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/db";
@@ -17,23 +21,26 @@ export async function POST(req) {
       );
     }
 
-    // Check if OTP already exists and is not expired
+    // Check existing OTP not expired
     const existingOtp = await Otp.findOne({ email });
     if (existingOtp && existingOtp.expiresAt > new Date()) {
       return NextResponse.json(
-        { error: "OTP already sent. Please wait before requesting a new one." },
+        {
+          error:
+            "OTP already sent. Please wait before requesting a new one."
+        },
         { status: 429 }
       );
     }
 
-    // Generate OTP
+    // Generate OTP (6 digits)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Hash password before saving in OTP
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Save OTP with temporary user info
+    // Save OTP record with temporary user info
     await Otp.findOneAndUpdate(
       { email },
       {
@@ -43,14 +50,20 @@ export async function POST(req) {
         code: otp,
         expiresAt,
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, new: true }
     );
 
-    // Send OTP email
+    // Send email
     await sendOtpEmail(email, `Your OTP is: ${otp}`);
 
     return NextResponse.json(
-      { message: "OTP sent to your email!", userTemp: { email, name: name || "Anonymous" } },
+      {
+        message: "OTP sent to your email!",
+        userTemp: {
+          email,
+          name: name || "Anonymous",
+        },
+      },
       { status: 200 }
     );
   } catch (err) {

@@ -1,7 +1,12 @@
+/**
+ * File: app/api/room/list/route.js
+ * Purpose: List rooms endpoint - returns all rooms created by authenticated user, includes room codes
+ */
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Room from "@/models/Room";
 import jwt from "jsonwebtoken";
+import User from "@/models/User";
 
 export async function GET(req) {
   try {

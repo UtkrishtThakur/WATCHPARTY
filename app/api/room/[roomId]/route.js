@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Room from "@/models/Room";
 import jwt from "jsonwebtoken";
+import User from "@/models/User";
 
 export async function DELETE(req, { params }) {
   try {
     await dbConnect();
 
-    const { roomId } = params;
+    // `params` may be a Promise in Next.js dynamic route handlers — await it
+    const { roomId } = await params;
 
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
     if (!token) {
@@ -30,7 +32,7 @@ export async function DELETE(req, { params }) {
     // Find the room
     const room = await Room.findById(roomId);
 
-    if (!room) {
+    if (!room) { 
       return NextResponse.json(
         { error: "Room not found" },
         { status: 404 }

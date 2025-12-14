@@ -1,3 +1,7 @@
+/**
+ * File: app/api/room/create/route.js
+ * Purpose: Create room endpoint - deletes previous active rooms (one-room-per-user), generates code, adds creator as participant
+ */
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/db";
 import Room from "@/models/Room";

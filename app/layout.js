@@ -1,3 +1,7 @@
+/**
+ * File: app/layout.js
+ * Purpose: Root layout component - wraps all pages, configures fonts, metadata, global styling
+ */
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 

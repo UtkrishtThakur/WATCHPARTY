@@ -1,3 +1,7 @@
+/**
+ * File: app/page.js
+ * Purpose: Root/landing page - redirects authenticated users to /room/join, shows login/register for guests
+ */
 'use client';
 
 import { useEffect, useState } from 'react';

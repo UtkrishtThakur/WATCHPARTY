@@ -1,3 +1,7 @@
+/**
+ * File: app/room/join/page.jsx
+ * Purpose: Join room page UI - lists user's rooms, join by code input, copy/enter/delete buttons
+ */
 'use client';
 
 import { useState, useEffect } from 'react';

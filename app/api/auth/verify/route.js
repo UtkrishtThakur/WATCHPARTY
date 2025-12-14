@@ -1,3 +1,6 @@
+/**
+ * File: app/api/auth/verify/route.js
+ */
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -18,7 +21,7 @@ export async function POST(req) {
       );
     }
 
-    // Find the OTP record
+    // Find OTP
     const otpRecord = await Otp.findOne({ email });
     if (!otpRecord) {
       return NextResponse.json(
@@ -27,7 +30,7 @@ export async function POST(req) {
       );
     }
 
-    // Check if OTP is expired
+    // Expired?
     if (otpRecord.expiresAt < new Date()) {
       await Otp.deleteOne({ email });
       return NextResponse.json(
@@ -36,7 +39,7 @@ export async function POST(req) {
       );
     }
 
-    // Verify OTP code
+    // Wrong code?
     if (otpRecord.code !== code) {
       return NextResponse.json(
         { error: "Invalid OTP code" },
@@ -44,16 +47,9 @@ export async function POST(req) {
       );
     }
 
-    // Check if user already exists
-    let user = await User.findOne({ email });
-    if (user && user.isVerified) {
-      return NextResponse.json(
-        { error: "User already exists" },
-        { status: 409 }
-      );
-    }
-
     // Create or update user
+    let user = await User.findOne({ email });
+
     if (!user) {
       user = await User.create({
         name: otpRecord.name || name || "Anonymous",
@@ -72,21 +68,29 @@ export async function POST(req) {
       );
     }
 
-    // Delete OTP record after successful verification
     await Otp.deleteOne({ email });
 
-    // Generate JWT token
+    // Generate JWT with user.id instead of _id
     const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET || "your-secret-key",
+      { id: user._id.toString(), email: user.email },
+      process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    // Exclude password from response
-    const { password: _, ...userData } = user.toObject();
+    // Normalize user object
+    const { password: _, _id, ...rest } = user.toObject();
+
+    const userClean = {
+      id: _id.toString(),
+      ...rest,
+    };
 
     return NextResponse.json(
-      { message: "OTP verified successfully!", token, user: userData },
+      {
+        message: "OTP verified successfully!",
+        token,
+        user: userClean, // 💥 FIXED: frontend now gets user.id
+      },
       { status: 200 }
     );
   } catch (err) {

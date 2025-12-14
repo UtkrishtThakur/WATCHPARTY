@@ -1,3 +1,7 @@
+/**
+ * File: components/ui/Button.jsx
+ * Purpose: Reusable button component - supports variants (primary/secondary), disabled states, custom styling
+ */
 import React from 'react';
 
 export default function Button({ 

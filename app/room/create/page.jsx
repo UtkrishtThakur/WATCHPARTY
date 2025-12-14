@@ -1,3 +1,7 @@
+/**
+ * File: app/room/create/page.jsx
+ * Purpose: Create room page UI - room name input, success screen shows generated code and copy button
+ */
 'use client';
 
 import { useState } from 'react';

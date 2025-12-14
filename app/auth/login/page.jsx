@@ -1,3 +1,7 @@
+/**
+ * File: app/auth/login/page.jsx
+ * Purpose: Login page UI - email and password input, login form
+ */
 'use client';
 
 import { useState, useEffect } from "react";

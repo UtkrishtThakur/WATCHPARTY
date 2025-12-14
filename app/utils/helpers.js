@@ -1,4 +1,7 @@
-// Helper functions for the app
+/**
+ * File: app/utils/helpers.js
+ * Purpose: General utility functions - date formatting, string manipulation, common helpers
+ */
 
 export function formatDate(date) {
   return new Date(date).toLocaleDateString("en-US", {

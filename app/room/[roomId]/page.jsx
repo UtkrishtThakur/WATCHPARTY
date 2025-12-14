@@ -1,189 +1,247 @@
-'use client';
+"use client";
+/**
+ * RoomPage (page.jsx)
+ * Wires everything:
+ * - useWebRTCStream -> start webcam, provide outgoingStream, injectMovieStream()
+ * - useAblySignal -> signaling
+ * - useWebRTCConnection -> pass outgoingStream + registerPeerConnection
+ * - PartyVideoPlayer -> host loads file -> RoomPage captures stream and injects
+ */
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import CallWindow from '@/components/call/CallWindow';
-import LoadingSpinner from '@/components/LoadingSpinner';
-import { useWebRTCStream } from '@/app/hooks/useWebRTCStream';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import CallWindow from "@/components/call/CallWindow";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import PartyVideoPlayer from "@/components/PartyVideoPlayer";
+import { useWebRTCStream } from "@/app/hooks/useWebRTCStream";
+import { useWebRTCConnection } from "@/app/hooks/useWebRTCConnection";
+import { useAblySignal } from "@/app/hooks/useAblySignal";
 
 export default function RoomPage() {
-  const params = useParams();
-  const roomId = params.roomId;
+  const { roomId } = useParams();
   const router = useRouter();
 
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isCamOn, setIsCamOn] = useState(true);
-  const [remoteStreams, setRemoteStreams] = useState([]);
+  const [error, setError] = useState("");
+
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [isHost, setIsHost] = useState(false);
   const [endingRoom, setEndingRoom] = useState(false);
 
-  const { stream: localStream, startStream, stopStream } = useWebRTCStream();
+  const videoRef = useRef(null);
 
+  // Use the unified stream hook
+  const {
+    localCamStream,
+    outgoingStream,
+    startStream,
+    stopStream,
+    injectMovieStream,
+    registerPeerConnection,
+    toggleAudio,
+    toggleVideo,
+  } = useWebRTCStream();
+
+  // Load user id
   useEffect(() => {
-    // Get current user from localStorage
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      try {
-        const user = JSON.parse(userData);
-        setCurrentUserId(user.id);
-      } catch (e) {
-        console.error('Failed to parse user data:', e);
-      }
-    }
-
-    loadRoom();
-    startStream();
-
-    return () => {
-      stopStream();
-    };
+    const raw = localStorage.getItem("user");
+    if (!raw) return;
+    try {
+      const json = JSON.parse(raw);
+      setCurrentUserId(json._id || json.id);
+    } catch {}
   }, []);
 
-  const loadRoom = async () => {
+  // Ably
+  const ably = useAblySignal(roomId, currentUserId);
+  const stableSignal = useMemo(() => {
+    if (!ably?.on || !ably?.send) return null;
+    return { on: ably.on, off: ably.off, send: ably.send };
+  }, [ably?.on, ably?.off, ably?.send]);
+
+  // WebRTC connection using outgoingStream
+  const { remoteStreams, connectionState, closeAll } = useWebRTCConnection({
+    roomId,
+    userId: currentUserId,
+    outgoingStream, // the single outgoing stream
+    signal: stableSignal,
+    registerPeerConnection, // allows useWebRTCStream to replace senders
+  });
+
+  // init: start webcam and load room
+  useEffect(() => {
+    startStream();
+    loadRoom();
+    return () => {
+      stopStream();
+      closeAll?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadRoom() {
     try {
       const res = await fetch(`/api/room/details/${roomId}`);
       const data = await res.json();
-
-      if (res.ok) {
-        setRoom(data.room);
-        // Log for debugging
-        console.log('Room data:', data.room);
-        console.log('createdBy:', data.room?.createdBy);
-      } else {
-        setError(data.error || 'Room not found');
-      }
-    } catch (err) {
-      console.error('Load room error:', err);
-      setError('Failed to load room');
+      if (res.ok) setRoom(data.room);
+      else setError(data.error || "Room not found");
+    } catch {
+      setError("Failed to load room");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleMicToggle = () => {
-    if (localStream) {
-      localStream.getAudioTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      setIsMicOn(!isMicOn);
-    }
-  };
-
-  const handleCamToggle = () => {
-    if (localStream) {
-      localStream.getVideoTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-      });
-      setIsCamOn(!isCamOn);
-    }
-  };
-
-  const handleLeaveRoom = async () => {
-    stopStream();
-    router.push('/room/join');
-  };
-
-  const handleEndRoom = async () => {
-    if (!confirm('Are you sure you want to end this room? All participants will be disconnected.')) {
-      return;
-    }
-
-    try {
-      setEndingRoom(true);
-      const token = localStorage.getItem('token');
-      const res = await fetch(`/api/room/${roomId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (res.ok) {
-        stopStream();
-        router.push('/room/join');
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to end room');
-        setEndingRoom(false);
-      }
-    } catch (err) {
-      console.error('End room error:', err);
-      alert('Failed to end room');
-      setEndingRoom(false);
-    }
-  };
-
-  if (loading) {
-    return <LoadingSpinner />;
   }
 
-  if (error) {
+  useEffect(() => {
+    if (!room || !currentUserId) return;
+    setIsHost(room.createdBy?._id === currentUserId);
+  }, [room, currentUserId]);
+
+  // Host: called by PartyVideoPlayer when the video element canplay
+  const handleMovieLoaded = () => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // capture the movie's MediaStream and inject into outgoing
+    try {
+      const movieStream = video.captureStream?.() || video.mozCaptureStream?.();
+      if (movieStream) {
+        injectMovieStream(movieStream);
+        console.log("🎬 Movie stream injected into outgoing stream");
+      } else {
+        alert("captureStream() not supported in this browser");
+      }
+    } catch (e) {
+      console.error("captureStream failed:", e);
+    }
+  };
+
+  // Movie sync via Ably (host broadcasts play/pause/seek)
+  const broadcast = (action, time) => {
+    ably.send?.("movie-sync", { action, time });
+  };
+
+  useEffect(() => {
+    if (!ably.connected) return;
+
+    const syncMovie = (data) => {
+      const { action, time = 0 } = data || {};
+      const v = videoRef.current;
+      if (!v) return;
+      try {
+        v.currentTime = time;
+      } catch {}
+      if (action === "play") v.play().catch(() => {});
+      if (action === "pause") v.pause();
+    };
+
+    const replyState = () => {
+      const v = videoRef.current;
+      if (!isHost || !v) return;
+      broadcast(v.paused ? "pause" : "play", v.currentTime);
+    };
+
+    ably.on("movie-sync", syncMovie);
+    ably.on("movie-sync-request", replyState);
+
+    return () => {
+      ably.off("movie-sync", syncMovie);
+      ably.off("movie-sync-request", replyState);
+    };
+  }, [ably.connected, isHost]);
+
+  useEffect(() => {
+    if (!isHost && ably.connected) {
+      ably.send?.("movie-sync-request", {});
+    }
+  }, [ably.connected, isHost]);
+
+  // Controls
+  const toggleMic = () => {
+    toggleAudio();
+  };
+  const toggleCam = () => {
+    toggleVideo();
+  };
+  const leaveRoom = () => {
+    closeAll?.();
+    stopStream?.();
+    router.push("/room/join");
+  };
+  const endRoom = async () => {
+    if (!confirm("End room for everyone?")) return;
+    setEndingRoom(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/room/${roomId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        closeAll?.();
+        stopStream?.();
+        router.push("/room/join");
+      } else alert("Failed to end room");
+    } catch {
+      alert("Failed to end room");
+    }
+    setEndingRoom(false);
+  };
+
+  if (loading) return <LoadingSpinner />;
+
+  if (error)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+      <div className="min-h-screen flex items-center justify-center text-white">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">{error}</h1>
-          <button
-            onClick={() => router.push('/room/join')}
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg"
-          >
-            Back to Rooms
+          <h1 className="text-xl font-bold mb-3">{error}</h1>
+          <button className="bg-blue-600 px-6 py-2 rounded" onClick={() => router.push("/room/join")}>
+            Back
           </button>
         </div>
       </div>
     );
-  }
 
   return (
-    <div className="bg-black">
-      <div className="p-4 flex justify-between items-center gap-4">
+    <div className="bg-black text-white">
+      <PartyVideoPlayer
+        ref={videoRef}
+        isHost={isHost}
+        onMovieStreamReady={handleMovieLoaded} // called when host's <video> can play (captureStream ready)
+        onHostPlay={() => broadcast("play", videoRef.current?.currentTime ?? 0)}
+        onHostPause={() => broadcast("pause", videoRef.current?.currentTime ?? 0)}
+        onHostSeek={(t) => broadcast("seek", Number(t))}
+      />
+
+      <div className="p-4 flex justify-between">
         <div>
-          <h1 className="text-white text-xl font-bold">{room?.name}</h1>
-          <p className="text-white/60 text-sm">{room?.participants?.length || 0} / {room?.maxParticipants} participants</p>
+          <h1 className="text-xl font-bold">{room?.name}</h1>
+          <p className="text-white/60 text-sm">
+            {room?.participants?.length} / {room?.maxParticipants}
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          {room?.code && (
-            <div className="bg-white/5 text-white rounded px-3 py-1 flex items-center gap-2">
-              <span className="text-sm">Code: <strong className="ml-1">{room.code}</strong></span>
-              <button
-                onClick={() => {
-                  try {
-                    navigator.clipboard.writeText(room.code);
-                    alert('Room code copied to clipboard');
-                  } catch (e) {
-                    console.warn('Copy failed', e);
-                  }
-                }}
-                className="ml-2 text-sm bg-white/10 hover:bg-white/20 px-2 py-1 rounded"
-              >
-                Copy
-              </button>
-            </div>
-          )}
-          
-          {/* Show end room button only for host */}
-          {currentUserId && room?.createdBy?._id === currentUserId && (
-            <button
-              onClick={handleEndRoom}
-              disabled={endingRoom}
-              className="bg-red-600 hover:bg-red-700 disabled:bg-red-800 text-white px-4 py-2 rounded font-medium transition"
-            >
-              {endingRoom ? 'Ending...' : '🛑 End Room'}
-            </button>
-          )}
-        </div>
+
+        {isHost && (
+          <button className="bg-red-600 px-4 py-2 rounded" onClick={endRoom} disabled={endingRoom}>
+            {endingRoom ? "Ending…" : "🛑 End Room"}
+          </button>
+        )}
       </div>
+
       <CallWindow
-        localStream={localStream}
+        localStream={localCamStream}
         remoteStreams={remoteStreams}
         participants={room?.participants || []}
-        onMicToggle={handleMicToggle}
-        onCamToggle={handleCamToggle}
-        onLeave={handleLeaveRoom}
-        isMicOn={isMicOn}
-        isCamOn={isCamOn}
+        isHost={isHost}
+        isMicOn={true}
+        isCamOn={true}
+        onMicToggle={toggleMic}
+        onCamToggle={toggleCam}
+        onLeave={leaveRoom}
+        onEndRoom={endRoom}
+        isLoading={connectionState !== "connected"}
+        endingRoom={endingRoom}
       />
     </div>
   );

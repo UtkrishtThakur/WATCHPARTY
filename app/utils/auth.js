@@ -1,3 +1,7 @@
+/**
+ * File: app/utils/auth.js
+ * Purpose: Authentication utilities - JWT token generation, validation, user verification
+ */
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";

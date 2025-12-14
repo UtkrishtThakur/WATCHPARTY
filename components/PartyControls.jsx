@@ -1,41 +1,30 @@
-import React from 'react';
-import Button from './ui/Button';
+"use client";
+import React from "react";
+import MicButton from "./call/MicButton";
+import CamButton from "./call/CamButton";
+import Button from "./ui/Button";
 
-export default function PartyControls({ 
-  onMicToggle, 
-  onCamToggle, 
+export default function PartyControls({
+  onMicToggle,
+  onCamToggle,
   onLeave,
+  onEndRoom,
+  isHost = false,
   isMicOn = true,
   isCamOn = true,
-  isLoading = false 
+  isLoading = false,
+  endingRoom = false,
 }) {
   return (
-    <div className="flex gap-4 justify-center items-center bg-gray-900 p-4 rounded-lg">
-      <Button
-        onClick={onMicToggle}
-        variant={isMicOn ? 'success' : 'danger'}
-        disabled={isLoading}
-        className="gap-2"
-      >
-        🎤 {isMicOn ? 'Mic On' : 'Mic Off'}
-      </Button>
-      
-      <Button
-        onClick={onCamToggle}
-        variant={isCamOn ? 'success' : 'danger'}
-        disabled={isLoading}
-        className="gap-2"
-      >
-        📹 {isCamOn ? 'Camera On' : 'Camera Off'}
-      </Button>
-      
-      <Button
-        onClick={onLeave}
-        variant="danger"
-        disabled={isLoading}
-      >
-        Leave Call
-      </Button>
+    <div className="flex flex-wrap gap-4 justify-center items-center bg-gray-900 p-4 rounded-lg">
+      <MicButton isOn={isMicOn} onClick={onMicToggle} disabled={isLoading} />
+      <CamButton isOn={isCamOn} onClick={onCamToggle} disabled={isLoading} />
+      <Button onClick={onLeave} disabled={isLoading} className="bg-red-700 hover:bg-red-800 text-white">🚪 Leave Call</Button>
+      {isHost && (
+        <Button onClick={onEndRoom} disabled={isLoading || endingRoom} className="bg-red-800 hover:bg-red-900 text-white">
+          {endingRoom ? "⏳ Ending..." : "🛑 End Room"}
+        </Button>
+      )}
     </div>
   );
 }

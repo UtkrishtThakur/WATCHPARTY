@@ -1,3 +1,7 @@
+/**
+ * File: app/api/auth/login/route.js
+ * Purpose: User login endpoint - verifies credentials, generates JWT token, returns user info
+ */
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/db";
@@ -17,13 +21,15 @@ export async function POST(req) {
       );
     }
 
-    // Find user in DB
+    // Find user
     const user = await User.findOne({ email });
     if (!user) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
     }
 
-    // Make sure password exists (user verified)
     if (!user.password) {
       return NextResponse.json(
         { error: "Password not set. Please verify OTP first." },
@@ -31,24 +37,39 @@ export async function POST(req) {
       );
     }
 
-    // Compare password
+    // Validate password
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
     }
 
-    // ✅ Generate JWT token
+    // Create JWT
     const token = jwt.sign(
       { id: user._id, email: user.email },
-      process.env.JWT_SECRET, // Make sure this is set in .env
+      process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    // Exclude password from response
-    const { password: _, ...userData } = user.toObject();
+    // REMOVE password
+    const { password: _, ...rawUser } = user.toObject();
+
+    // 🔥 FIX: RETURN user.id instead of _id
+    const formattedUser = {
+      ...rawUser,
+      id: rawUser._id, // required for WebRTC, Ably, Movie Sync
+    };
+
+    delete formattedUser._id; // prevent confusion
 
     return NextResponse.json(
-      { message: "Login successful", token, user: userData },
+      {
+        message: "Login successful",
+        token,
+        user: formattedUser,
+      },
       { status: 200 }
     );
   } catch (err) {

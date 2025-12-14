@@ -1,3 +1,7 @@
+/**
+ * File: models/Room.js
+ * Purpose: Mongoose Room schema - room data (name, code, participants, session info, expiry)
+ */
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
 
@@ -34,6 +38,16 @@ const roomSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    // Indicates whether a playback/session has started in this room
+    sessionStarted: {
+      type: Boolean,
+      default: false,
+    },
+    // Timestamp when the playback/session was started
+    sessionStartedAt: {
+      type: Date,
+      default: null,
     },
     createdAt: {
       type: Date,

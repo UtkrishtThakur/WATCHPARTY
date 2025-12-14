@@ -1,3 +1,7 @@
+/**
+ * File: components/LoadingSpinner.jsx
+ * Purpose: Loading indicator component - displays spinner while fetching data
+ */
 import React from 'react';
 
 export default function LoadingSpinner() {

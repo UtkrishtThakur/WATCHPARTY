@@ -1,3 +1,7 @@
+/**
+ * File: models/User.js
+ * Purpose: Mongoose User schema - email, password, name, timestamps
+ */
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(

@@ -1,3 +1,7 @@
+/**
+ * File: app/auth/register/page.jsx
+ * Purpose: Registration page UI - email, password, OTP input, registration flow
+ */
 'use client';
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";

@@ -1,3 +1,7 @@
+/**
+ * File: models/Otp.js
+ * Purpose: Mongoose OTP schema - temporary OTP records (email, code, expiry) for registration
+ */
 import mongoose from "mongoose";
 
 const otpSchema = new mongoose.Schema(
